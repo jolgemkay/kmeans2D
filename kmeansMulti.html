@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+
+</head>
+
+<body>
+    <div class="container-xxl">
+        <div class="row" style="text-align: center; padding-bottom: 40px; padding-top: 20px;">
+            <h1>K-means multi</h1>
+            <p>Created by Jørgen Eikjeland for IMT4204</p>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-auto">
+                <label for="formFile" class="form-label">Upload csv file</label>
+                <input class="form-control" type="file" id="upFileElem" onchange="readFile()" accept=".csv">
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-auto">
+                <table class="table table-responsive" id="t1" style="margin-bottom: 50px; margin-top: 50px">
+                    <thead>
+                        <tr>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-auto">
+                <h4 id="rowCount">Total rows: 0</h4>
+            </div>
+        </div>
+
+        <div class="navbar fixed-bottom justify-content-center">
+            <div class="col-md-auto">
+                <p>Powered by Chart.js and Bootstrap</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        let csvRows = []
+        let csvHeader = []
+
+        function prepareDownload() {
+            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config));
+            var dlAnchorElem = document.getElementById('downloadFile');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "config.json");
+
+        }
+        function readFile() {
+            var file = document.getElementById('upFileElem').files[0]
+            if (file) {
+                var reader = new FileReader();
+                reader.readAsText(file, "UTF-8");
+                reader.onload = function (evt) {
+                    lines = (evt.target.result).split('\r\n')
+                    csvHeader.push(lines[0].split(','));
+                    addHeader(csvHeader);
+                    for (var i = 1; i < lines.length; i++) {
+                        csvRows.push(lines[i].split(','));
+                        if (i < 6) {
+                            addRow(lines[i].split(','));
+                        }
+                    }
+                    setRowCount(csvRows.length);
+                }
+                reader.onerror = function (evt) {
+                    console.log("error reading file");
+                }
+            }
+        }
+        function setRowCount(c) {
+            document.getElementById('rowCount').innerHTML = "Total rows: " + c
+        }
+        function addHeader(header) {
+            header[0].forEach(x => {
+                $('#t1 > thead > tr').append('<th scope="col">' + x + '</th>');
+            })
+
+        }
+        function addRow(row) {
+            var html = "<tr>";
+            row.forEach(x => {
+                html += "<td>"
+                html += x
+                html += "</td>"
+            });
+            html += "</tr>"
+            $('#t1 > tbody > tr:first').before(html);
+        }
+        function reloadPage() {
+            location.reload();
+            setNValue(50);
+            setXYValue(50);
+        }
+
+    </script>
+
+</body>
+
+</html>
