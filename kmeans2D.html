@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.0/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-KyZXEAg3QhqLMpG8r+8fhAXLRk2vvoC2f3B09zVXn8CA5QIVfZOJ3BCsw2P0p/We" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+</head>
+
+<body onload="setParams()">
+    <div class="container-xxl">
+        <div class="row" style="text-align: center; padding-bottom: 40px; padding-top: 20px;">
+            <h1>K-means in 2D</h1>
+        </div>
+
+        <div class="row">
+            <div class="col-4">
+                <div class="container">
+                    <div class="row">
+                        <div class="col">
+                            <button type="button" onclick="reloadPage()" class="btn btn-danger">Full Reset</button>
+
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <label class="form-label" id="nlabel">n-value: </label>
+                            <input type="range" onchange="setNValue(this.value)" class="form-range" min="1" max="200"
+                                id="customRange3">
+                        </div>
+                        <div class="col" style="padding-top: 20px;">
+                            <label class="form-label" id="xylabel">x/y-max:</label>
+                            <input type="range" onchange="setXYValue(this.value)" class="form-range" min="1" max="100"
+                                id="customRange4">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <button type="button" onclick="generateData()" class="btn btn-primary">Generate
+                                data</button>
+                        </div>
+
+
+                    </div>
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <input class="form-control" type="file" id="upFileElem" onchange="readFile()">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <label class="form-label" id="klabel">K-value:</label>
+                            <input type="range" onchange="setKValue(this.value)" class="form-range" min="1" max="10"
+                                id="customRange2">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <button type="button" onclick="initCentersPlus(k)"
+                                class="btn btn-primary">K-Means++</button>
+
+                            <button type="button" onclick="initCenters(k)" class="btn btn-primary">K-means</button>
+
+                            <button type="button" onclick="reloadK(0)" class="btn btn-danger">Reset K</button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <button type="button" onclick="assignAndRecalc()" class="btn btn-success">Assign and
+                                center</button>
+                            <button type="button" onclick="compareAlgos(10)" class="btn btn-success">Compare algos
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <h3 id="iterations">Iterations: 0</h3>
+                        </div>
+                        <div class="col" style="padding-top: 20px;">
+                            <h3 id="variance">Variation: 0</h3>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col" style="padding-top: 20px;">
+                            <h3 id="clusterChange"></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-8">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+        <div class="row">
+            <table class="table" id="t1" style="margin-bottom: 50px;">
+                <thead>
+                    <tr>
+                        <th scope="col">Method</th>
+                        <th scope="col">Iterations</th>
+                        <th scope="col">N</th>
+                        <th scope="col">Step avarage</th>
+                        <th scope="col">Lowest variance</th>
+                        <th scope="col">Average variance</th>
+                        <th scope="col">Best K</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="row">
+            <div class="col">
+                <a id="downloadFile">
+                    <button type="button" class="btn btn-danger">Download</button>
+                </a>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-md-auto">
+                <p>Powered by Chart.js and Bootstrap</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        var ctx = document.getElementById('myChart');
+        var sample; //inital dataset. 
+        var k;
+        var n;
+        var xyMax;
+        var variance;
+        var centers = []; //datasets with current centers
+        var clusters = []; //datasets with assigned datapoints in cluster
+        var clustersBackup = [] //compare after new assignment.
+        var iterations = 0;
+        var logEntries = [];
+
+        const colors = [
+            'rgb(255,0,0)', //red
+            'rgb(0,255,0)', //green
+            'rgb(0,0,255)', //blue
+            'rgb(255,201,0)', //yellow
+            'rgb(248,55,250)', //purple
+        ]
+        const config = {
+            type: 'scatter',
+            data: [],
+            options: {
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom'
+                    }
+                },
+                animation: {
+                    duration: 0
+                }
+            }
+        };
+
+
+        function prepareDownload() {
+            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config));
+            var dlAnchorElem = document.getElementById('downloadFile');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", "config.json");
+
+        }
+
+        function readFile() {
+            var file = document.getElementById('upFileElem').files[0]
+            if (file) {
+                var reader = new FileReader();
+                reader.readAsText(file, "UTF-8");
+                reader.onload = function (evt) {
+                    console.log(evt.target.result);
+                }
+                reader.onerror = function (evt) {
+                    console.log("error reading file");
+                }
+            }
+        }
+
+
+        var myChart = new Chart(ctx, config);
+
+        function generateData() {
+            var d = randomPoints(n);
+            sample = d;
+            myChart.data.datasets = [{
+                label: 'Datapoints',
+                data: d,
+                backgroundColor: 'rgb(163, 163, 163)',
+                pointRadius: 7
+            }]
+            myChart.update();
+
+        }
+        function setKValue(value) {
+            k = value;
+            document.getElementById('klabel').innerHTML = "K-Value: " + value
+            document.getElementById('klabel').value = value
+        }
+        function setNValue(value) {
+            n = value;
+            document.getElementById('nlabel').innerHTML = "n-Value: " + value
+            document.getElementById('nlabel').value = value
+        }
+        function setXYValue(value) {
+            xyMax = value;
+            document.getElementById('xylabel').innerHTML = "x/y-max: " + value
+            document.getElementById('xylabel').value
+        }
+        function setParams() {
+            setNValue(100);
+            setXYValue(50);
+            setKValue(0);
+        }
+
+        function addRow(row) {
+            var html = "<tr>";
+            row.forEach(x => {
+                html += "<td>"
+                html += x
+                html += "</td>"
+            });
+            html += "</tr>"
+            $('#t1 > tbody > tr:first').before(html);
+        }
+
+        function reloadK(k) {
+            centers = [];
+            clusters = [];
+            clustersBackup = [];
+            iterations = 0;
+            setKValue(k);
+
+            variance = 0;
+            myChart.data.datasets = [{
+                label: 'Datapoints',
+                data: sample,
+                backgroundColor: 'rgb(163, 163, 163)',
+                pointRadius: 7
+            }]
+            myChart.update();
+
+        }
+
+
+        //k-means++
+        function initCentersPlus(ikp) {
+            myChart.data.datasets = []
+            var indexC1 = r(sample.length)
+            var c = sample[indexC1]
+            var cIndexes = [indexC1];
+            var chosenCenters = [c];
+            var c1 = {
+                label: 'c1',
+                data: [c], //pick first point random from set. 
+                pointRadius: 10,
+                backgroundColor: colors[0],
+                pointStyle: 'triangle',
+                borderColor: 'rgb(0,0,0)'
+            }
+            var cl1 = {
+                label: 'cl1',
+                data: [],
+                pointRadius: 7,
+                backgroundColor: colors[0]
+            }
+            clusters.push(cl1);
+            centers.push(c1);
+            myChart.data.datasets.push(c1)
+
+            var currD
+            var minD
+            var sumD
+            var dIndexList = [];
+            var dIndex;
+            //find the rest of the centroids (offset -1 since c1 is picked)
+            for (var kv = 0; kv < ikp - 1; kv++) {
+                //loop through each point
+                sumD = 0;
+
+                for (var i = 0; i < sample.length; i++) {
+                    //loop through each centroid and calculate distance exclude centers created. 
+                    if (cIndexes.includes(i)) {
+                        continue;
+                    } else {
+                        minD = 30000000.0
+                        dIndex = [];
+                        for (var j = 0; j < chosenCenters.length; j++) {
+                            currD = euc(sample[i], chosenCenters[j])
+                            if (currD <= minD) {
+                                minD = currD
+                                dIndex = [i, minD]
+                            }
+                        }
+                        if (dIndex.length > 0) {
+                            dIndexList.push(dIndex)
+                        }
+                    }
+                }
+
+                dIndexList.forEach(x => { sumD += x[1] })
+
+
+                var maxDMax = 0;
+                var newC;
+                for (var l = 0; l < dIndexList.length; l++) {
+
+                    var dMax = dIndexList[l][1] / sumD
+                    if (dMax >= maxDMax) {
+                        maxDMax = dMax
+                        newC = sample[dIndexList[l][0]]
+                        cIndexes.push(dIndexList[l][0])
+                    }
+
+
+                }
+                dIndexList = [];
+                chosenCenters.push(newC)
+
+                centers.push({
+                    label: 'c' + (kv + 2),
+                    data: [newC],
+                    pointRadius: 10,
+                    backgroundColor: colors[kv + 1],
+                    pointStyle: 'triangle',
+                    borderColor: 'rgb(0,0,0)'
+                })
+                clusters.push({
+                    label: 'cl' + (kv + 2),
+                    data: [],
+                    pointRadius: 7,
+                    backgroundColor: colors[kv + 1]
+                })
+
+                myChart.data.datasets.push({
+                    label: 'c' + (kv + 2),
+                    data: [newC],
+                    pointRadius: 10,
+                    backgroundColor: colors[kv + 1],
+                    pointStyle: 'triangle',
+                    borderColor: 'rgb(0,0,0)'
+                })
+
+            }
+            myChart.data.datasets.push({
+                label: 'Datapoints',
+                data: sample,
+                backgroundColor: 'rgb(163, 163, 163)',
+                pointRadius: 10
+            })
+            myChart.update();
+        }
+
+        //k-means
+        function initCenters(ik) {
+            myChart.data.datasets = []
+            var last = -1;
+            var randomPoint
+            for (var i = 0; i < ik; i++) {
+                //choose random point from datapoints
+                randomPoint = r(sample.length - 1)
+                if (randomPoint == last) {
+                    randomPoint = r(sample.length - 1)
+                }
+                last = randomPoint;
+                var c =
+                {
+                    label: 'c' + i,
+                    data: [sample[randomPoint]],
+                    pointRadius: 10,
+                    backgroundColor: colors[i],
+                    pointStyle: 'triangle',
+                    borderColor: 'rgb(0,0,0)'
+                }
+                var cl = {
+                    label: 'cl' + i,
+                    data: [],
+                    pointRadius: 7,
+                    backgroundColor: colors[i]
+                }
+                clusters.push(cl);
+                centers.push(c);
+                myChart.data.datasets.push(c)
+            }
+            myChart.data.datasets.push({
+                label: 'Datapoints',
+                data: sample,
+                backgroundColor: 'rgb(163, 163, 163)',
+                pointRadius: 7
+            })
+            myChart.update();
+        }
+        function centerOfMass() {
+
+            var sumX = 0;
+            var sumY = 0;
+            //go through clusters
+            for (var i = 0; i < clusters.length; i++) {
+                sumX = 0;
+                sumY = 0;
+                clusters[i].data.forEach(p => {
+                    sumX += p.x
+                    sumY += p.y
+                })
+                var avgX = sumX / clusters[i].data.length
+                var avgY = sumY / clusters[i].data.length
+                centers[i].data = [{ x: avgX, y: avgY }]
+            }
+            myChart.data.datasets = []
+            centers.forEach(x => {
+                myChart.data.datasets.push(x)
+            });
+            clusters.forEach(x => {
+                myChart.data.datasets.push(x)
+            });
+            myChart.update();
+            variance = getVariance();
+            document.getElementById('variance').innerHTML = "Variance: " + Math.floor(variance)
+        }
+        function assignAndRecalc() {
+            distanceAndAssign();
+            centerOfMass();
+            iterations++;
+            document.getElementById('iterations').innerHTML = "Iterations: " + iterations
+        }
+        function distanceAndAssign() {
+            var currD = 0;
+            var lastD;
+            var minD;
+            var c;
+            clustersBackup = clusters
+            clusters.forEach(cl => {
+                cl.data = [];
+            })
+            //loop through all datapoints. 
+            for (var i = 0; i < sample.length; i++) {
+                midD = 300000000.0;
+                //loop through all centers
+                for (var j = 0; j < centers.length; j++) {
+                    currD = (euc(sample[i], centers[j].data[0]))
+                    if (currD <= midD) {
+                        midD = currD
+                        c = j //find cluster with lowest distance
+                    }
+                    lastD = currD
+                }
+                clusters[c].data.push(sample[i])
+
+                //add dataPoint to cluster.    
+            }
+            //reset chart, add centers and clusters. 
+            myChart.data.datasets = []
+            centers.forEach(x => {
+                myChart.data.datasets.push(x)
+            });
+            clusters.forEach(x => {
+                myChart.data.datasets.push(x)
+            });
+            myChart.update();
+
+        }
+
+
+        function compareAlgos(iters) {
+            //run kmeans iters times
+            let kRuns = [];
+            for (var j = 1; j < n; j++) {
+                console.log("k-means with k: " + j);
+                for (var i = 0; i < iters; i++) {
+                    initCenters(j);
+                    var kVar = 0;
+                    var isChange = true
+                    while (isChange) {
+                        assignAndRecalc()
+                        if (kVar == variance) {
+                            isChange = false;
+                        } else {
+                            kVar = variance
+                        }
+                    }
+                    kRuns.push({
+                        its: iterations,
+                        var: variance,
+                        k: j
+                    })
+                    reloadK(k)
+                }
+            }
+            let row = [];
+            row.push("k-means");
+            row.push(iters);
+            row.push(n);
+            let sumStep = 0
+            kRuns.forEach(x => {
+                sumStep += x.its;
+            });
+            row.push(sumStep / kRuns.length)
+            let lowVar = 200000000
+            let sumVar = 0;
+            let bestK = 0;
+            kRuns.forEach(x => {
+                sumVar += x.var
+                if (x.var < lowVar) {
+                    lowVar = x.var
+                    bestK = x.k
+                }
+            });
+            row.push(lowVar)
+            row.push(sumVar / kRuns.length)
+            row.push(bestK)
+            addRow(row);
+
+            //run kmeans++ iters times
+            kRuns = [];
+            for (var j = 1; j < n; j++) {
+                console.log("k-means++ with k: " + j);
+                for (var i = 0; i < iters; i++) {
+                    initCentersPlus(j);
+                    var kVar = 0;
+                    var isChange = true
+                    while (isChange) {
+                        assignAndRecalc()
+                        if (kVar == variance) {
+                            isChange = false;
+                        } else {
+                            kVar = variance
+                        }
+                    }
+                    kRuns.push({
+                        its: iterations,
+                        var: variance,
+                        k: j
+                    })
+                    reloadK(k)
+                }
+            }
+            row = [];
+            row.push("k-means++");
+            row.push(iters);
+            row.push(n);
+            sumStep = 0
+            kRuns.forEach(x => {
+                sumStep += x.its;
+            });
+            row.push(sumStep / kRuns.length)
+            lowVar = 200000000
+            sumVar = 0;
+            bestK = 0;
+            kRuns.forEach(x => {
+                sumVar += x.var
+                if (x.var < lowVar) {
+                    lowVar = x.var
+                    bestK = x.k
+                }
+            });
+            row.push(lowVar)
+            row.push(sumVar / kRuns.length)
+            row.push(bestK)
+            addRow(row);
+        }
+
+
+
+        function getVariance() {
+            var v = 0;
+            for (var i = 0; i < clusters.length; i++) {
+                for (var j = 0; j < clusters[i].data.length; j++) {
+                    v += euc(clusters[i].data[j], centers[i].data[0]);
+                }
+            }
+            return v;
+        }
+        function reloadPage() {
+            location.reload();
+            setNValue(50);
+            setXYValue(50);
+        }
+        function euc(p1, p2) {
+            var d = Math.sqrt(Math.pow((p2.x - p1.x), 2) + Math.pow((p2.y - p1.y), 2))
+            return d
+        }
+        function r(n) {
+            return Math.floor(Math.random() * n);
+        }
+        function randomPoints(ns) {
+            var data = []
+            for (var i = 0; i < ns; i++) {
+                data.push(
+                    { x: r(xyMax), y: r(xyMax) }
+                );
+            }
+            return data;
+        }
+
+    </script>
+
+</body>
+
+</html>
